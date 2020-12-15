@@ -23,7 +23,7 @@
 
 
 function vsim = SpikeSimulationTool(varargin)
-%% Options
+%% Default Options
 Naxons      = 5;                    % Number of different templates
 SNR         = 20;                   % Initial signal to noise ratio (it will change with drift)
 growth      = [(1.1 + (2 - 1.1) * rand) (0.8 + (1.2 - 0.8) * rand)]; % [1.9 1.1];   % Growth of: [<spamp> <noise>]
@@ -41,9 +41,26 @@ do_filter   = true;                 % Bandpass filter the signal
 passband    = [40 1200];%[80, 600]; % Passband
 PLOT        = false;
 
+%% Default Events
+evnts.inflammation_onset   = round((total_time/4 + ((total_time*3/4) - (total_time/4)) * rand) * fs);  % High frequency at time
+evnts.inflammation_tau     = 5e-3*fs;  % Time constant for increased spike rate to decay to spontaneous activity
+evnts.inflammation_axons   = floor(0 + ((Naxons/2 - 0) * rand)); % Number of inflamed axons (increase the spike rate).
+
+evnts.amplitude_nat_onset  = 500*fs;   % Change of amplitude in just some of axons
+evnts.amplitude_nat_axons  = 0;        % Change of amplitude in just a couple of axons
+
+evnts.amplitude_dist_onset = round((total_time/4 + ((total_time*3/4) - (total_time/4)) * rand) * fs);  % Change of amplitude in all axons
+evnts.amplitude_dist_value = 0.5 + (1.5 - 0.5) * rand;      % Value of the new amplitude multiplier
+evnts.amplitude_dist_prob  = 0.2; % Probability of having a change in the amplitude
+
+evnts.prob_start           = floor(0 + ((Naxons/2 - 0) * rand)); % (Recruited) Number of axons that don't start at the beginning. They will randomly start somewhere along the recording.
+evnts.prob_end             = floor(0 + ((Naxons/2 - 0) * rand)); % (Dismissed) Number of axons that don't last the whole recording. They will randomly end somewhere along the recording.
+
+%% Set GUI user inputed options and events
 if nargin >= 1
    data       = varargin{1};
    
+   % Set option
    Naxons     = data.Naxons;
    SNR        = data.SNR;
    total_time = data.total_time;
@@ -58,23 +75,15 @@ if nargin >= 1
    do_filter  = data.do_filter;
    passband   = data.passband;
    PLOT       = data.PLOT;
+   
+   % Set events
+   events_ = varargin{2};
+   field_names = fieldnames(events_);
+   for i = 1 : length(field_names)
+       evnts.(field_names{1}) = events_.(field_names{1});
+   end
+   
 end
-
-
-%% Events
-evnts.inflammation_onset   = round((total_time/4 + ((total_time*3/4) - (total_time/4)) * rand) * fs);  % High frequency at time
-evnts.inflammation_tau     = 5e-3*fs;  % Time constant for increased spike rate to decay to spontaneous activity
-evnts.inflammation_axons   = floor(0 + ((Naxons/2 - 0) * rand)); % Number of inflamed axons (increase the spike rate).
-
-evnts.amplitude_nat_onset  = 500*fs;   % Change of amplitude in just some of axons
-evnts.amplitude_nat_axons  = 0;        % Change of amplitude in just a couple of axons
-
-evnts.amplitude_dist_onset = round((total_time/4 + ((total_time*3/4) - (total_time/4)) * rand) * fs);  % Change of amplitude in all axons
-evnts.amplitude_dist_value = 0.5 + (1.5 - 0.5) * rand;      % Value of the new amplitude multiplier
-evnts.amplitude_dist_prob  = 0.2; % Probability of having a change in the amplitude
-
-evnts.prob_start           = floor(0 + ((Naxons/2 - 0) * rand)); % (Recruited) Number of axons that don't start at the beginning. They will randomly start somewhere along the recording.
-evnts.prob_end             = floor(0 + ((Naxons/2 - 0) * rand)); % (Dismissed) Number of axons that don't last the whole recording. They will randomly end somewhere along the recording.
 
 
 %% Run
