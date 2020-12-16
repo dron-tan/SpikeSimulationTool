@@ -78,9 +78,8 @@ if nargin >= 1
    
    % Set events
    events_ = varargin{2};
-   field_names = fieldnames(events_);
-   for i = 1 : length(field_names)
-       evnts.(field_names{1}) = events_.(field_names{1});
+   for fn = fieldnames(events_)
+       evnts.(fn{1}) = events_.(fn{1});
    end
    
 end
@@ -207,7 +206,7 @@ end
 
 %% Print report
 try
-   if isfield('inf_time', report)
+   if isfield(report, 'inf_time')
       fprintf('\tInflammation: %.02f s| Number of inflamed axons: %d\n', report.inf_time * dt, numel(report.inflamed));
    else
       fprintf('\tNumber of inflamed axons: %d\n', 0);
