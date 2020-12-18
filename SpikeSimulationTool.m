@@ -76,12 +76,12 @@ if nargin >= 1
    passband   = data.passband;
    PLOT       = data.PLOT;
    
-   % Set events
+   % Replace default events with custom events from GUI input
    events_ = varargin{2};
-   for fn = fieldnames(events_)
-       evnts.(fn{1}) = events_.(fn{1});
+   for fn = fieldnames(events_)'
+        evnts.(fn{1}) = events_.(fn{1});
    end
-   
+
 end
 
 
