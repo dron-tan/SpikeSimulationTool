@@ -27,7 +27,7 @@ function vsim = SpikeSimulationTool(varargin)
 Naxons      = 5;                    % Number of different templates
 SNR         = 20;                   % Initial signal to noise ratio (it will change with drift)
 growth      = [(1.1 + (2 - 1.1) * rand) (0.8 + (1.2 - 0.8) * rand)]; % [1.9 1.1];   % Growth of: [<spamp> <noise>]
-total_time  = 2000;                 % Seconds
+total_time  = 100;                 % Seconds
 fs          = 5000;                 % Sampling rate (current template file has this sampling rate, so it should stay like this unless the templates are fixed)
 sr          = randi(10,1,Naxons)/2; % Spike rate
 overlap     = false;                % If true, it allows spikes of diff axons to overlap
@@ -80,10 +80,12 @@ evnts.prob_start           = floor(0 + ((Naxons/2 - 0) * rand)); % (Recruited) N
 evnts.prob_end             = floor(0 + ((Naxons/2 - 0) * rand)); % (Dismissed) Number of axons that don't last the whole recording. They will randomly end somewhere along the recording.
 
 %% Set custom events from GUI input
+if nargin >=1
    events_ = varargin{2};
    for fn = fieldnames(events_)'
         evnts.(fn{1}) = events_.(fn{1});
    end
+end
 
 
 %% Run
@@ -206,17 +208,10 @@ if PLOT
 end
 
 %% Print report
-try
-   if isfield(report, 'inf_time')
-      fprintf('\tInflammation: %.02f s| Number of inflamed axons: %d\n', report.inf_time * dt, numel(report.inflamed));
-   else
-      fprintf('\tNumber of inflamed axons: %d\n', 0);
-   end
-   fprintf('\tAmplitude change time: %.02f s\n', report.opts.Events.amplitude_dist_onset * dt);
-   fprintf('\tRecruited axons: %s\n', num2str(find(report.recruit > min(report.recruit))'));
-   fprintf('\tDismissed axons: %s\n', num2str(find(report.dismiss < max(report.dismiss))'));
-catch E
-   fprintf('\tCouldn''t print the report. Unexpected event: %s\n', E.message);
+if nargin == 0 % Checks if the SpikeSimulationTool.m was run as a standalone function or with the GUI
+    
+    fprintf(printReport(report, dt));
+    
 end
 %% Save
 % Check size of the variable to save. If it is larger than 2Gb, remove the
