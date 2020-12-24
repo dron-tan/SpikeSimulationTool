@@ -10,14 +10,15 @@ function report_op = printReport(report, dt)
 
 % Determines which axons are recruited and dismissed for the report
 axons_recruited = sprintf('%d, ', find(report.recruit > min(report.recruit)));
-axons_recruited = axons_recruited(1 : end-2); % removes final ', '
+axons_recruited = axons_recruited(1 : end-2); % removes last 2 characters ', '
 
 axons_dismissed = sprintf('%d, ', find(report.dismiss < max(report.dismiss)));
-axons_dismissed = axons_dismissed(1 : end-2); % removes final ', '
+axons_dismissed = axons_dismissed(1 : end-2); 
 
 % Print report depending on whether there is inflammation
 try
    if isfield(report, 'inf_time')
+      % with inflammation
       report_op = sprintf('Start time of inflammation: %.02f s | Number of inflamed axons: %d\nAmplitude change time: %.02f s\nRecruited axons: %s\nDismissed axons: %s\n', ...
                           report.inf_time * dt,                         ... % Start time of inflammation [s]
                           numel(report.inflamed),                       ... % Num of inflammed axons
@@ -26,6 +27,7 @@ try
                           axons_dismissed                               ... & Axons Dismissed
                           );
    else
+      % without inflammation
       report_op = sprintf('Number of inflamed axons: %d\nAmplitude change time: %.02f s\nRecruited axons: %s\nDismissed axons: %s\n', ...
                           0,                                            ... % Num of inflammed axons
                           report.opts.Events.amplitude_dist_onset * dt, ... % Amplitude change time [s]
