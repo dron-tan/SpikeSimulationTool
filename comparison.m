@@ -17,54 +17,68 @@
 % comparison tool can then be run to test. The buffer will need to be
 % adjusted
 
+%% Main
 close all
 clear
 
-% Loading in the simulation and extraction files NEED TO AUTOMATE
+% Loading in the simulation and extraction files.
 [simulated, extracted] = loadSimulations;
 
-% Plot the simulated sp locations (from chris code)
+% Plot the simulated sp locations (from chris code) for visualisation
 plotSpkLoc(simulated, extracted);
 
-% Initialising values
 % Note: if the buffer is tooooo large, there can be doubles in matchExtr,
 % and this will cause an ERROR
-
 buffer = 50;   % VARY THIS VALUE
 fprintf('\n\t<strong>Buffer used = %d</strong>\n', buffer);
 
-similarity.totalExactMatched = 0;
+% Initialisation of similarity values
+similarity.totalExactMatched    = 0;
 similarity.totalBufferedMatched = 0;
 
-
+% Comparison code
 % Loop through every template
 for templ = 1:extracted.nTemplates
     % Loop through every family per template
     for fam = 1:extracted.nFamilies(templ)
-        % Initialise the similarity struct
-        similarity.numMatched{templ}{fam} = [];
-        similarity.exactMatches{templ}{fam} = [];
-        similarity.exactMatcheswBuffer{templ}{fam} = [];
+        
+        % Initialise the similarity arrays
+        similarity.numMatched{templ}{fam}           = [];
+        similarity.exactMatches{templ}{fam}         = [];
+        similarity.exactMatcheswBuffer{templ}{fam}  = [];
         
         % Per template, per family, loop through the number of axons
         % simulated
         for n = 1:simulated.nAxons
-            % Find where there is a match according to the buffer
-            [matchSim, matchExtr] = ismembertol(simulated.spkIndex{n}, extracted.spks{templ}{fam}, buffer, 'DataScale', 1);
-            matchSimInd = find(matchSim == 1);
+            % Find where there is a match according to the initial buffer
+            [matchSim, matchExtr]       = ismembertol(simulated.spkIndex{n}, extracted.spks{templ}{fam}, buffer, 'DataScale', 1);
+            % Finds where in the simulation there is a match
+            matchSimInd                 = find(matchSim == 1);
             
             % Find the values where the difference is non consecutive to
             % remove from the template/family array
-            matchExtr(matchExtr == 0) = [];
-%             matchExtrNonConsec = find(diff(matchExtr) > 1) + 1;    % Want to keep this value, this is the value that is not matched (or just keep count of amount not matched)
+            % Removes from the extraction index array where there is not
+            % match between extracted and simulated datasets
+            matchExtr(matchExtr == 0)   = [];
             
-            temp = [1:size(extracted.spks{templ}{fam}, 1)]';
-            nonConsec = ismember(temp, matchExtr);
-            extractedFamComp = extracted.spks{templ}{fam};
+            % Creates a temp array with values from 1 to size of family
+            % extracted in increments of 1. This is then compared to
+            % matchExtr to find where the 'indexing' is not consecutive
+            % (e.g. 1 2 3 4 6 7 is missing 5, hence 5 is the non
+            % consecutive value/index).
+            % The value corresponding to this index from the extracted
+            % family array is then removed
+            temp                        = [1:size(extracted.spks{templ}{fam}, 1)]';
+            nonConsec                   = ismember(temp, matchExtr);
+            extractedFamComp            = extracted.spks{templ}{fam};
             extractedFamComp(find(nonConsec == 0)) = [];
             
-            % Calculate the overall shift between extracted and simulated
+            % If there is a difference in size between the two arrays,
+            % there will be an error printed. This will be due to the
+            % initial buffer being too large so the warning message will
+            % indicate to user to decrease the initial buffer value
             try
+                % Calculate the overall shift between extracted and simulated
                 shift = extractedFamComp - simulated.spkIndex{n}(matchSimInd);
             catch ME
                 if (strcmp(ME.identifier, 'MATLAB:dimagree'))
@@ -73,95 +87,133 @@ for templ = 1:extracted.nTemplates
                 rethrow(ME)
             end
             
-            % Categoris
+            % Depending on size of the array per template/family, there
+            % will be different functions
+            % Essentially, it will find the shift with the most occurances,
+            % indicating that for this template, this is the overall shift.
+            % For spikes that have this shift, it is an EXACT match. The
+            % shiftBuffer is to give a small leaway for slight inaccuracies
+            % that may occur.
             shiftBuffer = 2;
-            if size(shift, 1) > 10  % THIS VALUE NEEDS TO BE ADJUSTED
-                shiftVal = mode(shift);
-                shiftSame = find(shift == shiftVal);
-                shiftSamewBuffer = find(shift <= shiftVal + shiftBuffer & shift >= shiftVal - shiftBuffer);
-            elseif (size(shift, 1) <= 10) && (size(shift, 1) > 2)    % THESE RANGES CAN BE CHANGED
-                %??????? IDK WHAT TO DO!!!!
-                % Need to check if it is empty first, if empty, can just
-                % skip
-                shiftUnique = unique(shift);
-                shiftUniqueCount = histc(shift(:), shiftUnique);
-                [~, ind] = max(shiftUniqueCount);
-                shiftVal = shiftUnique(ind);
-                shiftSame = find(shift == shiftVal);
-                shiftSamewBuffer = find(shift <= shiftVal + shiftBuffer & shift >= shiftVal - shiftBuffer);
+            % For arrays that are larger than 10 values, it will simply
+            % find the shift value that occurs the most and this is the
+            % offset
+            if size(shift, 1) > 10  % NEEDS FINETUNING
+                shiftVal            = mode(shift);
+                shiftSame           = find(shift == shiftVal);
+                shiftSamewBuffer    = find(shift <= shiftVal + shiftBuffer & shift >= shiftVal - shiftBuffer);
+            % For arrays that are smaller (between 3 to 10 values), 
+            % This needs to be fixed, if max is only 1, indication that its
+            % not picking up anything, will want to assume that there is no
+            % match
+            elseif (size(shift, 1) <= 10) && (size(shift, 1) >= 2)    % NEEDS FINETUNING
+                shiftUnique             = unique(shift);
+                shiftUniqueCount        = histc(shift(:), shiftUnique);
+                [~, ind]                = max(shiftUniqueCount);
+                if shiftUniqueCount(ind) == 1   % If the maximum repeat is only once, consider that this array is just full of random, non-matching spikes
+                    shiftVal            = NaN;
+                    shiftSame           = [];
+                    shiftSamewBuffer    = [];
+                    break
+                end
+                shiftVal                = shiftUnique(ind);
+                shiftSame               = find(shift == shiftVal);
+                shiftSamewBuffer        = find(shift <= shiftVal + shiftBuffer & shift >= shiftVal - shiftBuffer);
+            % At this point, the array is probably empty, or just one
+            % value. Ignore it basically as it is not significant.
+            % However, there could be a way to check to see if the shift of
+            % this single value corresponds to the shift in arrays > 10.
             else
-                % If it is not empty, will need to check if there is a mode
-                % and determine if it is significant
-                shiftVal = NaN;
-                shiftSame = [];
-                shiftSamewBuffer = [];
+                shiftVal                = NaN;
+                shiftSame               = [];
+                shiftSamewBuffer        = [];
             end
             
             % Determines number of exact matches and buffered matches
-            similarity.totalExactMatched = similarity.totalExactMatched + size(shiftSame, 1);
-            similarity.totalBufferedMatched = similarity.totalBufferedMatched + size(shiftSamewBuffer, 1);
-            similarity.exactMatches{templ}{fam} = [similarity.exactMatches{templ}{fam}; size(shiftSame, 1)];
-            similarity.exactMatcheswBuffer{templ}{fam} = [similarity.exactMatcheswBuffer{templ}{fam}; size(shiftSamewBuffer, 1)];
+            similarity.totalExactMatched                = similarity.totalExactMatched + size(shiftSame, 1);
+            similarity.totalBufferedMatched             = similarity.totalBufferedMatched + size(shiftSamewBuffer, 1);
+            similarity.exactMatches{templ}{fam}         = [similarity.exactMatches{templ}{fam}; size(shiftSame, 1)];
+            similarity.exactMatcheswBuffer{templ}{fam}  = [similarity.exactMatcheswBuffer{templ}{fam}; size(shiftSamewBuffer, 1)];
         end
     end
 end
 
-report = dispReport(extracted, simulated, similarity);
-compiled = arrangeIntoCells(extracted, simulated, similarity, report);
-fprintf('\tTo access data, please open ''compiled'' in the workspace\n');
+% Prints out the report for overarching values
+report      = dispReport(extracted, simulated, similarity);
+
+% Compiles all the data into an array to export as an excel file
+compiled    = arrangeIntoCells(extracted, simulated, similarity, report);
+fprintf('\tTo access data, please open <strong>''compiled''</strong> in the workspace\n\n');
+
+% Saves the file as an excel spreadsheet
 saveFile(compiled);
 
 %% Functions
 
 %% Load function
 
+% Function will open the simulation files and extraction files and extract
+% the required data into structs to be used by the comparison tool.
+% Will automatically format arrays to the correct orientations.
 function [simulated, extracted] = loadSimulations
 
-% Open simulation
+% Open simulation. Use if you want to manually select files
 % [file, path] = uigetfile('*.mat');
 % fullName = fullfile(path, file);
 % load(fullName);
 
+% Currently will automatically load the simulation files according to the
+% file path
 % load('/Users/darrentan/Documents/SREP/Simulations/Completed 1/simulation1.mat');
 load('/Users/darrentan/Documents/SREP/Simulations/Test 10/simulation10.mat');
-% simulated.simulated = simulation;
-simulated.spks      = simulation.report.spks;
-simulated.nAxons    = size(simulation.report.spks, 2);
+
+simulated.spks      = simulation.report.spks;                   % Extracts the spikes data
+simulated.nAxons    = size(simulation.report.spks, 2);          % Number of axons that were simulated
+
 for i = 1:simulated.nAxons
-    simulated.spkIndex{i,:} = (find(simulated.spks(:,i) == 1));
+    simulated.spkIndex{i,:} = (find(simulated.spks(:,i) == 1)); % Loops through simulated axons and extracts the indexs where there were spikes
 end
 
-% Open extracted spikes
+% Open extracted spikes. Use if you want to manually select files
 % [file, path] = uigetfile('*.mat');
 % fullName = fullfile(path, file);
 % load(fullName);
 
+% Currently will automatically load the extraction files according to the
+% file path
 % load('/Users/darrentan/Documents/SREP/Simulations/Completed 1/extraction1.mat');
 load('/Users/darrentan/Documents/SREP/Simulations/Test 10/extraction10.mat');
-% extracted.extracted  = extraction;
-extracted.dt               = extraction.dt;
+
+extracted.dt               = extraction.dt;                         % Extracts the sampling rate
+
 if size(extraction.APstimes, 2) > 1
-    extraction.APstimes = extraction.APstimes';
+    extraction.APstimes = extraction.APstimes';                     % Corrects formatting of cell if detected to be incorrect
 end
-        
-extracted.nTemplates       = size(extraction.APstimes, 1);
+extracted.nTemplates       = size(extraction.APstimes, 1);          % Number of templates
+
 for i = 1:extracted.nTemplates
-    extracted.nFamilies(i) = size(extraction.APstimes{i, 1}, 1);
+    extracted.nFamilies(i) = size(extraction.APstimes{i, 1}, 1);    % Number of families per template
 end
-extracted.spks             = indexConversion(extraction.APstimes, extracted);
+
+extracted.spks             = indexConversion(extraction.APstimes, extracted);   % Determines the extracted indexing
 end
 
 %% Converts extracted from being indexed by time to index
+
+% The extracted data from the Extraction tool originally will record spikes
+% by simulation time, hence convertion of time to indexes is required
 function index = indexConversion(times, extracted)
 
+% Initialisng empty index cell
 index = {};
 
-for templ = 1:extracted.nTemplates
-    for fam = 1:extracted.nFamilies(templ)
+for templ = 1:extracted.nTemplates          % Loop through every template
+    for fam = 1:extracted.nFamilies(templ)  % Loop through every family per template
+        % If statement is to account for different formatting of cell
         if size(times{templ,1}{fam, 1}, 2) > 1
-            index{templ, 1}{fam, 1} = round(times{templ, 1}{fam, 1}'/extracted.dt);  % THERE CAN BE VARYING MATRIX DIMENSIONS (ROW OR COLUMN MATRIX)
+            index{templ, 1}{fam, 1} = round(times{templ, 1}{fam, 1}'/extracted.dt);  % Converts times to indexes of the extracted data
         else
-            index{templ, 1}{fam, 1} = round(times{templ, 1}{fam, 1}/extracted.dt);  % THERE CAN BE VARYING MATRIX DIMENSIONS (ROW OR COLUMN MATRIX)
+            index{templ, 1}{fam, 1} = round(times{templ, 1}{fam, 1}/extracted.dt);   % Converts times to indexes of the extracted data
         end
     end
 end
@@ -169,6 +221,9 @@ end
 end
 
 %% Plotting the simulated spike and extracted locations
+
+% Plotting the simulated and extracted spikes to visualise what and where
+% is being matched and determining if there are errors
 function plotSpkLoc(simulated, extracted)
 
 figure;
@@ -176,15 +231,15 @@ hold on;
 
 % Plotting the simulated
 for nAxon = 1:simulated.nAxons
-    nAxonTier = ((nAxon - 1)/length(simulated.spkIndex)) * 0.1;
+    nAxonTier = ((nAxon - 1)/length(simulated.spkIndex)) * 0.1;     % Scaling for seperate axons being simulated for visualisation
     stem(simulated.spkIndex{nAxon}, ones(size(simulated.spkIndex{nAxon})) - nAxonTier);
 end
 
 % PLotting the extracted
 for templ = 1:extracted.nTemplates
     for fam = 1:extracted.nFamilies(templ)
-        templTier   = (templ - 1) * 0.1;
-        famTier     = (fam / size(extracted.spks{templ}, 1)) * 0.1;
+        templTier   = (templ - 1) * 0.1;                            % Scaling for each template for visualisation
+        famTier     = (fam / size(extracted.spks{templ}, 1)) * 0.1; % Scaling for each family for visualisation
         
         stem(extracted.spks{templ}{fam}(:,1), 0.5*ones(size(extracted.spks{templ}{fam}(:,1))) - famTier - templTier);
     end
@@ -194,16 +249,17 @@ end
 %% Generate report
 function report = dispReport(extracted, simulated, similarity)
 
-% Find the number of spikes for simulated and extracted
+% Find the total number of spikes simulated in the simulation file
 for i = 1:simulated.nAxons
     report.numPerSimulatedAxon(i) = size(find(simulated.spks(:,i) == 1), 1);
 end
 report.numSimulatedSpks           = sum(report.numPerSimulatedAxon);
 
+% Find the total number of spikes extracted by the extraction tool
 for templ = 1:extracted.nTemplates
     sumTempl = 0;
     for fam = 1:extracted.nFamilies(templ)
-        sumTempl = sumTempl + size(extracted.spks{templ, 1}{fam, 1}, 1);    % THERE CAN BE VARYING MATRIX DIMENSIONS (ROW OR COLUMN MATRIX)
+        sumTempl = sumTempl + size(extracted.spks{templ, 1}{fam, 1}, 1);
     end
     report.numPerExtractedTemplate(templ) = sumTempl;
 end
@@ -211,46 +267,51 @@ report.numExtractedSpks = sum(report.numPerExtractedTemplate);
 
 % Print the number of spikes for each and include the percentage that the
 % extractor was able to pick up
-
 fprintf('\n\tNumber of Simulated spikes: %.2f\n', report.numSimulatedSpks);
 fprintf('\tNumber of OBTAINED Extracted spikes: %.2f\n', report.numExtractedSpks);
-fprintf('\tNumber of CORRECTLY Extracted spikes: %.2f\n', similarity.totalExactMatched);
-fprintf('\t%.2f%% of spikes were extracted\n\n', (report.numExtractedSpks/report.numSimulatedSpks)*100);
+fprintf('\tNumber of CORRECTLY Extracted spikes: %.2f\n', similarity.totalBufferedMatched);
+fprintf('\t%.2f%% of spikes were extracted\n\n', (similarity.totalBufferedMatched/report.numSimulatedSpks)*100);   % This value is according to the buffered matched
 
 end
 
 %% Excel
+
+% This function compiles all the data that has been determined into a cell
+% array to be exported into excel
 function compiled = arrangeIntoCells(extracted, simulated, similarity, report)
 
 compiled = cell(1, 7);
 
+% Storing overall statistics
 compiled{1,1} = 'Number of Simulated Spikes:'; compiled{1,2} = report.numSimulatedSpks;
 compiled{1,3} = 'Number of OBTAINED Extracted Spikes:'; compiled{1,4} = report.numExtractedSpks;
 compiled{1,5} = 'Number of CORRECTLY Extracted Spikes:'; compiled{1,6} = similarity.totalBufferedMatched;
 compiled{1,7} = '';
 
-count = 3;
+count = 3;  % Count value for formatting purposes
 
-compiled{3,1} = 'nAxon';
-compiled{3,2} = 'Template';
-compiled{3,3} = 'Family';
-compiled{3,4} = 'Exact Matched';
-compiled{3,5} = 'Buffered Matched';
-compiled{3,6} = 'Extracted Total';
-compiled{3,7} = 'Certainty';
+% Giving titles per column
+compiled{3,1} = 'nAxon';                % Simulated axon number
+compiled{3,2} = 'Template';             % Extracted template number
+compiled{3,3} = 'Family';               % Extracted family number
+compiled{3,4} = 'Exact Matched';        % Number of EXACT matches between extracted and simulated
+compiled{3,5} = 'Buffered Matched';     % Number of BUFFERED matches between extracted and simulated
+compiled{3,6} = 'Extracted Total';      % Total number of extracted spikes per template-family
+compiled{3,7} = 'Certainty';            % Certainty that the template-family is from the simulated axon as a percentage (Buffered Matched value is used here)
 
 for axon = 1:simulated.nAxons
-    
     for templ = 1:extracted.nTemplates
         for fam = 1:extracted.nFamilies(templ)
-            compiled{count + 1, 1} = axon;
-            compiled{count + 1, 2} = templ;
-            compiled{count + 1, 3} = fam;
-            compiled{count + 1, 4} = similarity.exactMatches{templ}{fam}(axon);
-            compiled{count + 1, 5} = similarity.exactMatcheswBuffer{templ}{fam}(axon);
-            compiled{count + 1, 6} = size(extracted.spks{templ}{fam}, 1);
-            compiled{count + 1, 7} = [num2str(round((similarity.exactMatcheswBuffer{templ}{fam}(axon)/size(extracted.spks{templ}{fam}, 1))*100, 2)), 2 '%'];
-            count = count + 1;
+            % Providing data according to the column title
+            compiled{count + 1, 1} = axon;          % Simulation axon number
+            compiled{count + 1, 2} = templ;         % Extracted template number
+            compiled{count + 1, 3} = fam;           % Extracted family number
+            compiled{count + 1, 4} = similarity.exactMatches{templ}{fam}(axon);         % Number of EXACT matches between extracted and simulated
+            compiled{count + 1, 5} = similarity.exactMatcheswBuffer{templ}{fam}(axon);  % Number of BUFFERED matches between extracted and simulated
+            compiled{count + 1, 6} = size(extracted.spks{templ}{fam}, 1);               % Total number of extracted spikes per template-family
+            compiled{count + 1, 7} = [num2str(round((similarity.exactMatcheswBuffer{templ}{fam}(axon)...    % Certainty that the template-family is from the simulated axon as a percentage (Buffered Matched value is used here)
+                /size(extracted.spks{templ}{fam}, 1))*100, 2)), 2 '%'];
+            count                  = count + 1;
         end
     end
 end
@@ -258,6 +319,8 @@ end
 end
 
 %% Safe file
+
+% Function saves the compiled data as an .xlsx file to be accessed in excel
 function saveFile(compiled)
 
 [file, path] = uiputfile(['completedExtractionInformation' filesep 'completedExtraction.xlsx'], 'Save file name');
