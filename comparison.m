@@ -29,7 +29,7 @@ plotSpkLoc(simulated, extracted);
 
 % Note: if the buffer is tooooo large, there can be doubles in matchExtr,
 % and this will cause an ERROR
-buffer = 50;   % VARY THIS VALUE
+buffer = 200;   % VARY THIS VALUE
 fprintf('\n\t<strong>Buffer used = %d</strong>\n', buffer);
 
 % Initialisation of similarity values
@@ -114,11 +114,11 @@ for templ = 1:extracted.nTemplates
                     shiftVal            = NaN;
                     shiftSame           = [];
                     shiftSamewBuffer    = [];
-                    break
+                else
+                    shiftVal                = shiftUnique(ind);
+                    shiftSame               = find(shift == shiftVal);
+                    shiftSamewBuffer        = find(shift <= shiftVal + shiftBuffer & shift >= shiftVal - shiftBuffer);
                 end
-                shiftVal                = shiftUnique(ind);
-                shiftSame               = find(shift == shiftVal);
-                shiftSamewBuffer        = find(shift <= shiftVal + shiftBuffer & shift >= shiftVal - shiftBuffer);
             % At this point, the array is probably empty, or just one
             % value. Ignore it basically as it is not significant.
             % However, there could be a way to check to see if the shift of
@@ -164,8 +164,8 @@ function [simulated, extracted] = loadSimulations
 
 % Currently will automatically load the simulation files according to the
 % file path
-% load('/Users/darrentan/Documents/SREP/Simulations/Completed 1/simulation1.mat');
-load('/Users/darrentan/Documents/SREP/Simulations/Test 10/simulation10.mat');
+% load('/Users/darrentan/Documents/SREP/Simulations/KMeans/Simulations/simulation1.mat');
+load('/Users/darrentan/Documents/SREP/Simulations/Artemio and Katies/Simulations/simulation2.mat');
 
 simulated.spks      = simulation.report.spks;                   % Extracts the spikes data
 simulated.nAxons    = size(simulation.report.spks, 2);          % Number of axons that were simulated
@@ -181,8 +181,8 @@ end
 
 % Currently will automatically load the extraction files according to the
 % file path
-% load('/Users/darrentan/Documents/SREP/Simulations/Completed 1/extraction1.mat');
-load('/Users/darrentan/Documents/SREP/Simulations/Test 10/extraction10.mat');
+% load('/Users/darrentan/Documents/SREP/Simulations/KMeans/Extractions/extraction1.mat');
+load('/Users/darrentan/Documents/SREP/Simulations/Artemio and Katies/Extractions/extraction2.mat');
 
 extracted.dt               = extraction.dt;                         % Extracts the sampling rate
 
