@@ -6,16 +6,22 @@
 % Summer Research Experience Program - Spike Simulation Suite
 % Christopher Ong & Chi Yung Darren Tan | 08 March 2021
 
-%%
+%% How to use:
+
 % The comparison tool will automate testing the accuracy of the extraction
 % tool
 
 % Initially, user must generate extraction and simulation pairs with files
 % name being:
 % 'simulation#' and 'extraction#' where # is replaced by a integer
+% Simulation files need to be in a simulation folder
+% Extraction files need to be in a extraction folder
+% Adjust the directory pathway accordingly to where the Simulation and
+% Extraction folders are with the corresponding pair in the correct folder
 
-% comparison tool can then be run to test. The buffer will need to be
-% adjusted
+% User then can run this tool and it will automatically go through all
+% simulation/extraction pairs and produce and excel spreadsheet with all
+% data recorded.
 
 %% Main
 close all

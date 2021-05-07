@@ -55,7 +55,7 @@
 %     http://www.apache.org/licenses/LICENSE-2.0
 % 
 % Unless required by applicable law or agreed to in writing, software
-% distributed under the License is distributed on an "AS IS" BASIS,
+% distributed under the License is distributed on an "AS IS" BASIS,xs
 % WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 % See the License for the specific language governing permissions and
 % limitations under the License.
@@ -72,6 +72,7 @@ function v = add_drift(v_in, varargin)
    opts.Th = false;
    opts.PwLocs = 0;
    opts.PwGrowth = 0;
+   opts.PwRandom = true;
    
    % Validate inputs and assign optional values
    if ~mod(nargin,2)
@@ -92,6 +93,10 @@ function v = add_drift(v_in, varargin)
       if opts.PwLocs > numel(v_in)
          error('''PwLocs'' can''t be larger than the duration of the recording.');
       end
+      
+      if opts.PwRandom
+          opts.Pieces = 5;
+      end
    end
    
    v = get_drift(v_in, opts);
@@ -106,7 +111,7 @@ function v = add_drift(v_in, varargin)
    
    if opts.Noise
       % Calculate the variance of the signal
-      [a, b] = findpeaks( v_in, 'MinPeakHeight', 0.01, 'MinPeakWidth', 3);
+      [a, b] = findpeaks( v_in, 'MinPeakHeight', 0.01, 'MinPeakProminence', 0.05);
       rms_v = (sum(a.^2))/numel(a);
       % Change the variance of the noise to comply with the SNR
       % var_n = (rms_v^2)/opts.SNR;
@@ -136,7 +141,7 @@ function v = get_drift(v, opts)
    else
       drift_v = linspace(1, g, L); % Drift of signal
       if opts.PwLocs == 0
-         [piecewise_locations, piecewise_growth] = get_piecewise(opts.Pieces, L);
+         [piecewise_locations, piecewise_growth] = get_piecewise(opts.Pieces, L, opts.PwRandom);
 
          for i = 1:numel(piecewise_locations)
             new_drift = drift_v(piecewise_locations(i) : end);
@@ -160,7 +165,7 @@ function n = get_noise(L, opts, variance)
       drift_n = linspace(1, g, L); % Drift of noise
    else
       drift_n = linspace(1, g, L); % Drift of signal
-      [piecewise_locations, piecewise_growth] = get_piecewise(opts.Pieces, L);
+      [piecewise_locations, piecewise_growth] = get_piecewise(opts.Pieces, L, opts.PwRandom);
       
       for i = 1:numel(piecewise_locations)
          new_drift = drift_n(piecewise_locations(i) : end);
@@ -175,9 +180,11 @@ function n = get_noise(L, opts, variance)
    n = n .* drift_n; % Drifted noise
 end
 
-function [pl, pg] = get_piecewise(Npieces, L)
+function [pl, pg] = get_piecewise(Npieces, L, pwRandom)
    pg = rand(Npieces, 1) - 0.5; % Random growth between -0.5 and 0.5
-   pg(rand(Npieces, 1) < 0.75) = []; % 75% probability of each to be removed
+   if pwRandom
+       pg(rand(Npieces, 1) < 0.75) = []; % 75% probability of each to be removed
+   end 
    
    % Find random Piece Locations
    pl = randi(round(2*L/3), [numel(pg), 1]);
