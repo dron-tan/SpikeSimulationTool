@@ -28,14 +28,14 @@ close all
 clear
 
 % Load in all files for both simulation and extraction
-fileIDSimulation = struct2cell(dir(['/Users/darrentan/Documents/SREP/Simulations/Artemio and Katies/Simulations' '/*.mat']));
-fileIDExtraction = struct2cell(dir(['/Users/darrentan/Documents/SREP/Simulations/Artemio and Katies/Extractions' '/*.mat']));
+fileIDSimulation = struct2cell(dir(['/Users/darrentan/Documents/SREP/Simulations/Data collection/sim14/Simulations' '/*.mat']));
+fileIDExtraction = struct2cell(dir(['/Users/darrentan/Documents/SREP/Simulations/Data collection/sim14/Extractions' '/*.mat']));
 
 % Initialising the final struct
 compiledTotal = {};
 
 % Loop through every pair of simulation and extraction
-for num = 1:size(dir(['/Users/darrentan/Documents/SREP/Simulations/Artemio and Katies/Simulations' '/*.mat']), 1)
+for num = 1:size(dir(['/Users/darrentan/Documents/SREP/Simulations/Data collection/sim14/Simulations' '/*.mat']), 1)
     similarity = {};    % Creating a new similiarty cell array per pair
     
     % Loading in the simulation and extraction files.

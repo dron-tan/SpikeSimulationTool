@@ -237,9 +237,13 @@ templates.d = (diff(templates.d)./diff(templates.t));   % 1st derivative to conv
 templates.d = -templates.d./min(templates.d);           % Normalising template to the minimum point of extracellular template
 templates.t = templates.t(1:end-1);                     % Adjusting time matrix to be same length as data matrix
 
+templates.d = smooth(templates.d, 6);
+
 % Transition templates
 for i = 1:size(templates.transition,2)
     templates.transition{i} = (diff(templates.transition{i})./(1/parameters.sampling_rate));    % 1st derivative to convert from intracellular to extracellular
     templates.transition{i} = -templates.transition{i}./min(templates.transition{i});           % Normalising template to minimum point
+    
+    templates.transition{i} = smooth(templates.transition{i}, 6);
 end
 end
