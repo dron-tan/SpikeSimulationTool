@@ -230,6 +230,7 @@ end
 
 % It will also normalise the extracellular template to work with the SpikeSimulationTool
 % and the SpikeExtractionTool. Normalise to the minimum point of the extracellular template
+
 function templates = intra2extra(templates, parameters)
 
 % Master template
