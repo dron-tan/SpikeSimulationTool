@@ -180,12 +180,12 @@ function [vv, report] = run_simulation(Naxons, templates, fs, duration ,opts ,am
      
       
       currentTemplate = templates_(i); % Randomly pick 1 of the templates to assign to this axon.
-      duration_of_spike = templates(currentTemplate).abs_refract_index + length(templates(currentTemplate).transition); % Duration(idx) until first spike no longer transitions
+      duration_of_spike = templates(currentTemplate).refract_index + length(templates(currentTemplate).transition); % Duration(idx) until first spike no longer transitions
       isi = random('Exponential', fs/opts.SpikeRate(i), [3*max_spike_num 1]);
       isi = round(isi);
       % Remove isi that are closer than the duration of a spike or
       % refractory period
-      isi(isi <= templates(currentTemplate).abs_refract_index) = []; % isi(isi < (size(templates,1) + rest)) = ceil(size(templates,1) + rest);
+      isi(isi <= templates(currentTemplate).refract_index) = []; % isi(isi < (size(templates,1) + rest)) = ceil(size(templates,1) + rest);
       
       
       % If it doesn't get affected by inflammation, it's firing rate
@@ -199,7 +199,7 @@ function [vv, report] = run_simulation(Naxons, templates, fs, duration ,opts ,am
          sr = 9 * exp(-(1:numel(isi)-inf_sample)/(tau)) + 1; % Get an exponential from 10 to 1 with time constant tau
          isi(inf_sample + 1:end) = isi(inf_sample + 1:end)./sr';
          % Remove isi that are closer than the duration of a spike
-         isi(isi <= templates(currentTemplate).abs_refract_index) = [];
+         isi(isi <= templates(currentTemplate).refract_index) = [];
          isi = ceil(isi);
       end
       
@@ -238,12 +238,12 @@ function [vv, report] = run_simulation(Naxons, templates, fs, duration ,opts ,am
       % Create a recording of zeroes
       v_non_transition = zeros(duration, 1);
       v_transition = zeros(duration, 1);
-      spks(:,i) = zeros(duration, 1);
+      spks(:,i) = zeros(duration, 1); % Used for reports and not template generation
       
       % Assign binary spikes to the vector, the amplitude of the spikes is
       % weighted, instead of being just 1 or 0.
       v_non_transition(non_transition) = amplitudes(i);
-      spks(sptimes,i) = 1;
+      spks(sptimes,i) = 1; % Used for reports and not template generation
       % Vary the amplitude
       rand_amp = 0.99 + (1.01 - 0.99) .* rand(size(non_transition)); % small variation in amplitude
       v_non_transition(non_transition) = v_non_transition(non_transition).*rand_amp;
@@ -251,20 +251,21 @@ function [vv, report] = run_simulation(Naxons, templates, fs, duration ,opts ,am
       % If the amplitude of current axon changes suddenly, scale all the
       % spikes after such time.
       % Ref: quirk2001, tsubokawa1996
+      log_amp = 0;
       if ~isempty(find(amped == i,1))
          end_amp = (0.5 * rand(1,1) - 0.25); % Change in amplitude limited to 0.15 and -0.15
-         log_amp = amplitudes(i) + (end_amp./(1 + exp(-10 * dt * ([1 : length(v_non_transition)] - amp_time)))); % logistic function
-         v_non_transition = v_non_transition .* log_amp';
-%          v_transition = v_transition .* log_amp'; NOT INTERGRATED  WITH
-%          TRANSITIONING SPIKES YET
+         log_amp =  (end_amp./(1 + exp(-10 * dt * ([1 : length(v_non_transition)] - amp_time)))); % logistic function
+         amp = 1 + log_amp';
+         v_non_transition = v_non_transition .* amp;
       end
       
       % Propagate the spike shape along the spikes vector
       v_non_transition = conv(v_non_transition,templates(currentTemplate).d);
       v_non_transition = v_non_transition(1 : duration, 1); % Remove trailing bits of convolution
-
-      if ~isempty(transition) % Only run gen_transitions if there are transitions
-          v_transition = amplitudes(i)*gen_transitions(transition_cells, templates(currentTemplate).transition, duration, templates(currentTemplate).abs_refract_index);
+      
+      % Only run gen_transitions if there are transitions
+      if ~isempty(transition)
+          v_transition = (amplitudes(i) + log_amp') .* gen_transitions(transition_cells, templates(currentTemplate).transition, duration, templates(currentTemplate).refract_index);
       end
       
       % Assign the temporal variable v_ to the matrix of axons
@@ -281,10 +282,18 @@ function [vv, report] = run_simulation(Naxons, templates, fs, duration ,opts ,am
    % multiply all the values of v_ after the change in time.
    if (amp_disturbance_onset > 0) && (rand < amp_disturbance_probability)
       vv(amp_disturbance_onset : end, : ) = vv(amp_disturbance_onset : end, : ) * amp_disturbance_value;
+   else
+       amp_disturbance_onset = NaN;
+       report.opts.Events.amplitude_dist_onset = NaN; % If disturbance does not occur, set the disturbance onset time to NaN
    end
    
    report.locs = locs;
    report.spks = spks;
+   report.templatesUsed = templates(templates_); % Record the templates used
+   
+   if ~exist('amp_time', 'var'); amp_time = NaN; end
+   tempFamGroupings = categoriseTempFamGroups(templates_, Naxons, st_time, end_time, amp_disturbance_value, amp_disturbance_onset, amped, amp_time, locs);
+   report.tempFamGroupings = tempFamGroupings';
       
    % Close progress bar
    try delete(w); catch E, fprintf(2,'\t%s\n',E.message); end
@@ -336,4 +345,63 @@ for j = 1 : length(group_start_n_end) - 1
   transition_cells{j} = transition(group_start_n_end(j)+1 : group_start_n_end(j+1));
 end
 
+end
+
+function tempFamGroupings = categoriseTempFamGroups(templates_, Naxons, st_time, end_time, amp_disturbance_value, amp_disturbance_onset, amped, amp_time, locs)
+
+% Categorizes axons into families (same family if they have the same
+% template)
+temp_fam_groupings(:,2) = templates_';%temp_fam_groupings = zeros(size(templates_', 1), 2);
+temp_fam_groupings(:,1) = (1:Naxons)';
+%    n = 1;
+%    for i = unique(templates_)
+%        temp_fam_groupings(templates_'==i, 2) = n; % Changes the template num to start from 1,2,3... to follow how the extractor orders it
+%        n=n+1;
+%    end
+temp_fam_groupings = num2cell(temp_fam_groupings); % Changes from matrix to cell
+
+% add the onset time of External Disturbance since a change in amplitude greater
+% than 10% will be grouped to a different family NEEDS TO BE CONFIRMED
+change_amp_diff_fam = 0.1; % ADJUST THIS VALUE TO MAKE IT MORE OR LESS SENSITIVE TO CHANGING FAMILIES
+family_st_end = num2cell([st_time' end_time'], 2); % add the start and end times of each axon
+if ~isnan(amp_disturbance_onset) && (amp_disturbance_value > 1+change_amp_diff_fam || amp_disturbance_value < 1-change_amp_diff_fam)
+    for ii = 1 : Naxons
+        if amp_disturbance_onset > st_time(ii) && amp_disturbance_onset < end_time(ii) % Checks if the disturbance occurs while the axon is active
+            family_st_end{ii} = [family_st_end{ii}(1), amp_disturbance_onset, family_st_end{ii}(2)];
+        end
+    end
+end
+
+% add the onset time for Natural Disturbance
+if ~isequal(amped, 0) && (end_amp > change_amp_diff_fam || end_amp < -change_amp_diff_fam)
+    for ii = amped
+        if ~isnan(amp_time) && amp_time > st_time(ii) && amp_time < end_time(ii) % Checks if the disturbance occurs while the axon is active
+            family_st_end{ii}(end+1) = amp_time; % Adds the natural disturbance onset to the end, this will be fixed in the next line
+            family_st_end{ii} = sort(family_st_end{ii}, 'ascend'); % Sorts it so that family times will occur in the right order
+        end
+    end
+end
+
+% Allocates the sptimes of each naxon to a family and the family num
+for ii = 1 : Naxons
+    for iii = 1 : length(family_st_end{ii})-1
+        temp_fam_groupings{ii, 3}{iii,1} = locs{ii}(and(locs{ii} >= family_st_end{ii}(iii),locs{ii} < family_st_end{ii}(iii+1)));
+        temp_fam_groupings{ii, 3} = temp_fam_groupings{ii, 3}(~cellfun('isempty', temp_fam_groupings{ii, 3})); % Deletes family group with no actual sp in it (rare occurs but does)
+        
+        % Family num
+        family_offset = 0;
+        if ii > 1 % pass the first axon
+            repeat_shape_idx = find(temp_fam_groupings{ii,2} == [temp_fam_groupings{1:ii-1, 2}]);
+            if any(repeat_shape_idx)
+                for n = (repeat_shape_idx)
+                    family_offset = length(temp_fam_groupings{n,3}) + family_offset;
+                end
+            end
+        end
+        temp_fam_groupings{ii, 4} = (1:(length(family_st_end{ii})-1)) + family_offset;
+    end
+end
+
+% Assigns the family and template groupings to a field in the report
+tempFamGroupings = cell2struct(temp_fam_groupings, {'Naxon', 'template', 'family_sptimes', 'family_num'}, 2);
 end
