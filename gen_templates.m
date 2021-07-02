@@ -238,13 +238,25 @@ templates.d = (diff(templates.d)./diff(templates.t));   % 1st derivative to conv
 templates.d = -templates.d./min(templates.d);           % Normalising template to the minimum point of extracellular template
 templates.t = templates.t(1:end-1);                     % Adjusting time matrix to be same length as data matrix
 
-templates.d = smooth(templates.d, 6);
+change = find(templates.d < 0, 1, 'first');
+templates.d(1:change) = smooth(templates.d(1:change), 3);
+templates.d(change:end) = smooth(templates.d(change:end), 11);
 
 % Transition templates
 for i = 1:size(templates.transition,2)
     templates.transition{i} = (diff(templates.transition{i})./(1/parameters.sampling_rate));    % 1st derivative to convert from intracellular to extracellular
     templates.transition{i} = -templates.transition{i}./min(templates.transition{i});           % Normalising template to minimum point
     
-    templates.transition{i} = smooth(templates.transition{i}, 6);
+    change_1 = find(templates.transition{i} < 0, 1, 'first');
+    templates.transition{i}(1:change_1) = smooth(templates.transition{i}(1:change_1), 3);
+    templates.transition{i}(change_1:templates.refract_index) = smooth(templates.transition{i}(change_1:templates.refract_index), 11);
+    
+    [~, I] = max(diff(templates.transition{i}));
+    change_2 = find(templates.transition{i}(I:end) < 0, 1, 'first') - 1;
+    templates.transition{i}(templates.refract_index:change_2 + I) = ...
+        smooth(templates.transition{i}(templates.refract_index:change_2 + I), 3);
+    templates.transition{i}(change_2 + I:end) = ...
+        smooth(templates.transition{i}(change_2 + I:end), 11);
+    
 end
 end
